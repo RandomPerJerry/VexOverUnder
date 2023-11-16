@@ -115,60 +115,80 @@ import time
 
 # Begin project code
 
-PI = math.pi
-sin = math.sin
-rad = math.radians
 class Tracking:
 
-    #the distance btween each wheel and the tracking center 
-    LDISTANCE = None
-    RDISTANCE = None
-    BDISTANCE = None
-    WHEELLENGTH = 3 #Diameter in inch
-    TICKSPERINCH = 360 / (WHEELLENGTH * PI)
+    def __init__(self, LTrackWheel, RTrackWheel, BTrackWheel, TICKSPERINCH, RDISTANCE, LDISTANCE, BDISTANCE):
+        # Initialize variable using function peramerters
+        self.LTrackWheel = LTrackWheel
+        self.RTrackWheel = RTrackWheel
+        self.BTrackWheel = BTrackWheel
+        self.TICKSPERINCH = TICKSPERINCH
+        self.RDISTANCE = RDISTANCE
+        self.LDISTANCE = LDISTANCE
+        self.BDISTANCE = BDISTANCE
 
-
-    def __init__(self):
-        #storing the pervious values of encorder to calculate the change 
-        self.preLval = 0
-        self.preRval = 0
-        self.preBval = 0
-
-        #storing the current values of encoder
-        self.curLval = LTrackWheel.value()
-        self.curRval = RTrackWheel.value()
-        self.curBval = BTrackWheel.value()
-
-        #The current recorded cordinates and angle 
-        self.curCord = (0, 0)
+        self.preAngle = 0
         self.curAngle = 0
+        self.curCord = (0, 0)
 
     def update_encoder_values(self):
-        #storing the value into the prev version before updating the current values
+        # Store the current encoder values in local variables
         self.preLval = self.curLval
-        self.curRval = self.curRval
-        self.curBval = self.curBval
+        self.preRval = self.curRval
+        self.preBval = self.curBval
 
-        #updating the values
+        # Updating the values
         self.curLval = LTrackWheel.value()
         self.curRval = RTrackWheel.value()
         self.curBval = BTrackWheel.value()
 
-    def get_angle(self):
-        #calculating the change in angle, Formula: dAngle = (left arc lenth - right arc lenth) / (RDISTANCE + LDISTANCE)
-        dAngle = ((self.curLval - self.preLval - self.curRval + self.preRval) / self.TICKSPERINCH) / (self.RDISTANCE + self.LDISTANCE)
-        self.curAngle += dAngle
+        # Calculate the change in each encoders’ value since the last cycle, and convert to distance of wheel travel
+        self.deltaL = (self.curLval - self.preLval) / self.TICKSPERINCH
+        self.deltaR = (self.curRval - self.preRval) / self.TICKSPERINCH
+        self.deltaS = (self.curBval - self.preBval) / self.TICKSPERINCH
 
+    def get_angle(self):
+        # Calculate new absolute orientation 
+        # Formula: θ = θ + (ΔL - ΔR) / (L + R)
+        self.curAngle += (self.deltaL - self.deltaR) / (self.LDISTANCE + self.RDISTANCE)
         return self.curAngle
 
     def get_cord(self):
-        # Formula: x = 2 * sin(theta/2) * ((back arc lenth / theta)+BDISTANCE)
-        # Formula: y = 2 * sin(theta/2) * ((right arc lenth / theta)+RDISTANCE)
+        # Calculate the change in angle
+        deltaTheta = self.get_angle() - self.preAngle
+        self.preAngle = self.get_angle()
 
-        x_cord = 2 * sin(rad(self.get_angle() / 2)) * (((self.curBval - self.preBval) / self.TICKSPERINCH) / self.get_angle() + self.BDISTANCE)
-        y_cord = 2 * sin(rad(self.get_angle() / 2)) * (((self.curRval - self.preRval) / self.TICKSPERINCH) / self.get_angle() + self.RDISTANCE)
+        # Calculate the local offset
+        # Formula: X: 2 sin(Δθ / 2) * (ΔS / Δθ + B)
+        #          Y: 2 sin(Δθ / 2) * (ΔR / Δθ + R)
+        if deltaTheta == 0:
+            localOffset = [self.deltaS, self.deltaR]
+        else:
+            localOffset = [2 * math.sin(deltaTheta / 2) * (self.deltaS / deltaTheta + self.BDISTANCE),
+                           2 * math.sin(deltaTheta / 2) * (self.deltaR / deltaTheta + self.RDISTANCE)]
 
-        self.curCord = (x_cord, y_cord)
+        # Calculate the average orientation
+        avgTheta = self.preAngle + deltaTheta / 2
+
+        # Calculate global offset (2d matrix rotation)
+        # x' = x cos θ - y sin θ
+        # y' = x sin θ + y cos θ
+        globalOffset = [localOffset[0] * math.cos(-avgTheta) - localOffset[1] * math.sin(-avgTheta),
+                        localOffset[0] * math.sin(-avgTheta) + localOffset[1] * math.cos(-avgTheta)]
+
+        # Calculate new absolute position
+        self.curCord = (self.curCord[0] + globalOffset[0], self.curCord[1] + globalOffset[1])
+
+        return self.curCord
+
+
+# Create a Tracking object
+tracking = Tracking(LTrackWheel, RTrackWheel, BTrackWheel, TICKSPERINCH, RDISTANCE, LDISTANCE, BDISTANCE)
+
+#   TICKSPERINCH = 360 / (x * PI) # x is the diameter of the wheel in inch
+#   RDISTANCE # distance from the center of the robot to the right wheel
+#   LDISTANCE # distance from the center of the robot to the left wheel
+#   BDISTANCE # distance from the center of the robot to the back wheel
 
 
 
