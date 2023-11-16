@@ -127,6 +127,21 @@ class Tracking:
         self.LDISTANCE = LDISTANCE
         self.BDISTANCE = BDISTANCE
 
+        # Initialize encoder values
+        self.curLval = 0
+        self.curRval = 0
+        self.curBval = 0
+        # Initialize previous encoder values
+        self.preLval = 0
+        self.preRval = 0
+        self.preBval = 0
+
+        # Initialize delta values (change in encoder values)
+        self.deltaL = 0
+        self.deltaR = 0
+        self.deltaS = 0
+
+        # Initialize cord values
         self.preAngle = 0
         self.curAngle = 0
         self.curCord = (0, 0)
