@@ -19,6 +19,7 @@ Cata_Motor = MotorGroup(Cata_Motor_motor_a, Cata_Motor_motor_b)
 LTrackWheel = Encoder(brain.three_wire_port.a)
 RTrackWheel = Encoder(brain.three_wire_port.c)
 BTrackWheel = Encoder(brain.three_wire_port.e)
+intake_motor = Motor(Ports.PORT10, GearSetting.RATIO_36_1, False)
 
 
 # wait for rotation sensor to fully initialize
@@ -113,9 +114,13 @@ from vex import *
 import math
 import time
 
+
 # Begin project code
 
 class Tracking:
+
+    # length units: inches
+    # angle units: radians
 
     def __init__(self, LTrackWheel, RTrackWheel, BTrackWheel, TICKSPERINCH, RDISTANCE, LDISTANCE, BDISTANCE):
         # Initialize variable using function peramerters
@@ -164,7 +169,7 @@ class Tracking:
 
     def get_angle(self):
         # Calculate new absolute orientation 
-        # Formula: θ = θ + (ΔL - ΔR) / (L + R)
+        # Formula: θ = (ΔL - ΔR) / (L + R)
         self.curAngle += (self.deltaL - self.deltaR) / (self.LDISTANCE + self.RDISTANCE)
         return self.curAngle
 
@@ -195,15 +200,104 @@ class Tracking:
         self.curCord = (self.curCord[0] + globalOffset[0], self.curCord[1] + globalOffset[1])
 
         return self.curCord
+    
+class controls:
+    def __init__(self, controller, cata_direction = 0, intake_position = 0):
+        self.controller = controller
+        self.cata_direction = cata_direction
+        self.intake_position = intake_position
+
+    def x_enable_cata(self):
+
+        if self.controller.buttonX.pressing():
+            match self.cata_direction:
+                case 0:
+                    Cata_Motor.spin(FORWARD)
+
+                case 1:
+                    Cata_Motor.spin(REVERSE)
+
+        else:
+            Cata_Motor.stop()
+
+    def b_toggle_intake(self):
+
+        match self.intake_position:
+            case 0:
+                self.intake_position = 1
+                intake_motor.spin_to_position(180, wait = False)
+
+            case 1:
+                self.intake_position = 0
+                intake_motor.spin_to_position(0, wait = False)
+
+    def update(self, **kargs):
+        self.kargs = kargs
+
+        if self.kargs["cata_direction"] == 0:
+            self.cata_direction = 0
+
+        elif self.kargs["cata_direction"] == 1:
+            self.cata_direction = 1
+
+        elif self.kargs["cata_direction"] == 2:
+            match self.cata_direction:
+                case 0:
+                    self.cata_direction = 1
+
+                case 1:
+                    self.cata_direction = 0
+
+
+        if self.kargs["intake_position"] == 0:
+            self.intake_position = 0
+
+        elif self.kargs["intake_position"] == 1:
+            self.intake_position = 1
+
+        elif self.kargs["intake_position"] == 2:
+            match self.intake_position:
+                case 0:
+                    self.intake_position = 1
+
+                case 1:
+                    self.intake_position = 0
+        
+
 
 
 # Create a Tracking object
-tracking = Tracking(LTrackWheel, RTrackWheel, BTrackWheel, TICKSPERINCH, RDISTANCE, LDISTANCE, BDISTANCE)
-
+tracking = Tracking(LTrackWheel, RTrackWheel, BTrackWheel, 360 / (3.25 * math.pi), RDISTANCE, LDISTANCE, BDISTANCE)
 #   TICKSPERINCH = 360 / (x * PI) # x is the diameter of the wheel in inch
 #   RDISTANCE # distance from the center of the robot to the right wheel
 #   LDISTANCE # distance from the center of the robot to the left wheel
 #   BDISTANCE # distance from the center of the robot to the back wheel
+
+# comp settings
+def pre_autonomous():
+    # actions to do when the program starts
+    brain.screen.clear_screen()
+    brain.screen.print("pre auton code")
+    wait(1, SECONDS)
+
+def autonomous():
+    brain.screen.clear_screen()
+    brain.screen.print("autonomous code")
+
+def driver_control():   
+    brain.screen.clear_screen()
+    brain.screen.print("driver control code")
+    inputs = controls(controller_1)
+
+    while True:
+
+        inputs.x_enable_cata()
+        controller_1.buttonB.pressed(inputs.b_toggle_intake)
+        controller_1.buttonUp.pressed(lambda: inputs.update(cata_direction = 2))
+
+comp = Competition(driver_control, autonomous)
+pre_autonomous()
+
 
 
 
