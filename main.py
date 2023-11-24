@@ -114,172 +114,34 @@ from vex import *
 import math
 import time
 
+from odometry import Tracking # debugging
+from driver_controls import controls # unfinished
+from autonomous import auto_track # unfinished
 
-# Begin project code
-
-class Tracking:
-
-    # length units: inches
-    # angle units: radians
-
-    def __init__(self, LTrackWheel, RTrackWheel, BTrackWheel, TICKSPERINCH, RDISTANCE, LDISTANCE, BDISTANCE):
-        # Initialize variable using function peramerters
-        self.LTrackWheel = LTrackWheel
-        self.RTrackWheel = RTrackWheel
-        self.BTrackWheel = BTrackWheel
-        self.TICKSPERINCH = TICKSPERINCH
-        self.RDISTANCE = RDISTANCE
-        self.LDISTANCE = LDISTANCE
-        self.BDISTANCE = BDISTANCE
-
-        # Initialize encoder values
-        self.curLval = 0
-        self.curRval = 0
-        self.curBval = 0
-        # Initialize previous encoder values
-        self.preLval = 0
-        self.preRval = 0
-        self.preBval = 0
-
-        # Initialize delta values (change in encoder values)
-        self.deltaL = 0
-        self.deltaR = 0
-        self.deltaS = 0
-
-        # Initialize cord values
-        self.preAngle = 0
-        self.curAngle = 0
-        self.curCord = (0, 0)
-
-    def update_encoder_values(self):
-        # Store the current encoder values in local variables
-        self.preLval = self.curLval
-        self.preRval = self.curRval
-        self.preBval = self.curBval
-
-        # Updating the values
-        self.curLval = LTrackWheel.value()
-        self.curRval = RTrackWheel.value()
-        self.curBval = BTrackWheel.value()
-
-        # Calculate the change in each encoders’ value since the last cycle, and convert to distance of wheel travel
-        self.deltaL = (self.curLval - self.preLval) / self.TICKSPERINCH
-        self.deltaR = (self.curRval - self.preRval) / self.TICKSPERINCH
-        self.deltaS = (self.curBval - self.preBval) / self.TICKSPERINCH
-
-    def get_angle(self):
-        # Calculate new absolute orientation 
-        # Formula: θ = (ΔL - ΔR) / (L + R)
-        self.curAngle += (self.deltaL - self.deltaR) / (self.LDISTANCE + self.RDISTANCE)
-        return self.curAngle
-
-    def get_cord(self):
-        # Calculate the change in angle
-        deltaTheta = self.get_angle() - self.preAngle
-        self.preAngle = self.get_angle()
-
-        # Calculate the local offset
-        # Formula: X: 2 sin(Δθ / 2) * (ΔS / Δθ + B)
-        #          Y: 2 sin(Δθ / 2) * (ΔR / Δθ + R)
-        if deltaTheta == 0:
-            localOffset = [self.deltaS, self.deltaR]
-        else:
-            localOffset = [2 * math.sin(deltaTheta / 2) * (self.deltaS / deltaTheta + self.BDISTANCE),
-                           2 * math.sin(deltaTheta / 2) * (self.deltaR / deltaTheta + self.RDISTANCE)]
-
-        # Calculate the average orientation
-        avgTheta = self.preAngle + deltaTheta / 2
-
-        # Calculate global offset (2d matrix rotation)
-        # x' = x cos θ - y sin θ
-        # y' = x sin θ + y cos θ
-        globalOffset = [localOffset[0] * math.cos(-avgTheta) - localOffset[1] * math.sin(-avgTheta),
-                        localOffset[0] * math.sin(-avgTheta) + localOffset[1] * math.cos(-avgTheta)]
-
-        # Calculate new absolute position
-        self.curCord = (self.curCord[0] + globalOffset[0], self.curCord[1] + globalOffset[1])
-
-        return self.curCord
+# Begin project code    
+class timer:
+    def __init__(self):
+        self.target_time = 0
     
-class controls:
-    def __init__(self, controller, cata_direction = 0, intake_position = 0):
-        self.controller = controller
-        self.cata_direction = cata_direction
-        self.intake_position = intake_position
+    def set_time(self, timing):
+        self.target_time = time.time_ns() + timing * (10**6)
 
-    def x_enable_cata(self):
-
-        if self.controller.buttonX.pressing():
-            match self.cata_direction:
-                case 0:
-                    Cata_Motor.spin(FORWARD)
-
-                case 1:
-                    Cata_Motor.spin(REVERSE)
-
-        else:
-            Cata_Motor.stop()
-
-    def b_toggle_intake(self):
-
-        match self.intake_position:
-            case 0:
-                self.intake_position = 1
-                intake_motor.spin_to_position(180, wait = False)
-
-            case 1:
-                self.intake_position = 0
-                intake_motor.spin_to_position(0, wait = False)
-
-    def update(self, **kargs):
-        self.kargs = kargs
-
-        if self.kargs["cata_direction"] == 0:
-            self.cata_direction = 0
-
-        elif self.kargs["cata_direction"] == 1:
-            self.cata_direction = 1
-
-        elif self.kargs["cata_direction"] == 2:
-            match self.cata_direction:
-                case 0:
-                    self.cata_direction = 1
-
-                case 1:
-                    self.cata_direction = 0
-
-
-        if self.kargs["intake_position"] == 0:
-            self.intake_position = 0
-
-        elif self.kargs["intake_position"] == 1:
-            self.intake_position = 1
-
-        elif self.kargs["intake_position"] == 2:
-            match self.intake_position:
-                case 0:
-                    self.intake_position = 1
-
-                case 1:
-                    self.intake_position = 0
+    def check_time(self):
+        if self.target_time <= time.time_ns():
+            return True
         
+        return False
+    
+# unit: inches
+RDISTANCE = None
+LDISTANCE = None
+BDISTANCE = None
+tracking = Tracking(LTrackWheel, RTrackWheel, BTrackWheel, 360 / (3.25 * math.pi), RDISTANCE, LDISTANCE, BDISTANCE) # inche per tick = 0.02836
 
-
-
-# Create a Tracking object
-tracking = Tracking(LTrackWheel, RTrackWheel, BTrackWheel, 360 / (3.25 * math.pi), RDISTANCE, LDISTANCE, BDISTANCE)
-#   TICKSPERINCH = 360 / (x * PI) # x is the diameter of the wheel in inch
-#   RDISTANCE # distance from the center of the robot to the right wheel
-#   LDISTANCE # distance from the center of the robot to the left wheel
-#   BDISTANCE # distance from the center of the robot to the back wheel
+inputs = controls(controller_1, Cata_Motor, intake_motor)
+track_update_timer = timer()
 
 # comp settings
-def pre_autonomous():
-    # actions to do when the program starts
-    brain.screen.clear_screen()
-    brain.screen.print("pre auton code")
-    wait(1, SECONDS)
-
 def autonomous():
     brain.screen.clear_screen()
     brain.screen.print("autonomous code")
@@ -287,20 +149,26 @@ def autonomous():
 def driver_control():   
     brain.screen.clear_screen()
     brain.screen.print("driver control code")
-    inputs = controls(controller_1)
 
     while True:
 
-        inputs.x_enable_cata()
+        if track_update_timer.check_time():
+            
+            tracking.update_encoder_values()
+
+            # Display the cordinates for debugging 
+            controller_1.screen.clear_screen()
+            display_cord = tracking.get_cord() # adding this for readability
+            controller_1.screen.print(f'Cordinates: ({round(display_cord[0], 2)}, {round(display_cord[1], 2)}), unit = Inches')
+            controller_1.screen.next_row()
+            controller_1.screen.print(f'Angle: {math.degrees(tracking.get_angle())} degrees')
+
+            #add driver control assists (using odo)
+
+            track_update_timer.set_time(10) # unit: miliseconds 
+
+        inputs.x_enable_cata()  # enable cata when x is pressed
         controller_1.buttonB.pressed(inputs.b_toggle_intake)
         controller_1.buttonUp.pressed(lambda: inputs.update(cata_direction = 2))
 
 comp = Competition(driver_control, autonomous)
-pre_autonomous()
-
-
-
-
-
-
-
